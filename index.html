@@ -290,13 +290,14 @@
 
   <section class="stories" id="stories">
     </section>
-
 <script>
 document.addEventListener("DOMContentLoaded", () => {
   let loggedInUser = JSON.parse(localStorage.getItem("user")) || null;
 
-  // NEW: A simple "database" for our demo
+  // user "database"
   const userDB = JSON.parse(localStorage.getItem("user_database")) || {};
+  // stories database
+  let storiesDB = JSON.parse(localStorage.getItem("stories_database")) || [];
 
   const userBadge = document.createElement("div");
   userBadge.id = "userBadge";
@@ -353,15 +354,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function bindAddLine(newCard) {
+  // ---- NEW: save updated stories to localStorage ----
+  function saveStoriesToDB() {
+    localStorage.setItem("stories_database", JSON.stringify(storiesDB));
+  }
+
+  function bindAddLine(newCard, storyId) {
     const btn = newCard.querySelector('.addLineBtn');
     if (btn) {
       btn.addEventListener('click', function() {
         const textarea = newCard.querySelector('.add-line textarea');
         const content = newCard.querySelector('.story-content');
         if (textarea.value.trim() !== "") {
-          content.innerHTML += '<br>' + escapeHtml(textarea.value);
+          const newLine = escapeHtml(textarea.value);
+          content.innerHTML += '<br>' + newLine;
           textarea.value = "";
+
+          // update in DB
+          const story = storiesDB.find(s => s.id === storyId);
+          if (story) {
+            story.content += "\n" + newLine;
+            saveStoriesToDB();
+          }
         }
       });
     }
@@ -386,7 +400,12 @@ document.addEventListener("DOMContentLoaded", () => {
           ${isOwned ? `<button class="delete-btn" data-story-id="${story.id}">×</button>` : ''}
       `;
       storiesSection.prepend(newCard);
-      bindAddLine(newCard);
+      bindAddLine(newCard, story.id);
+  }
+
+  function renderStories() {
+      storiesSection.innerHTML = '';
+      storiesDB.forEach(story => addStoryCardToDOM(story));
   }
 
   function saveStoryLocally(title, content) {
@@ -396,8 +415,10 @@ document.addEventListener("DOMContentLoaded", () => {
         authorEmail: loggedInUser.email, 
         id: Date.now() 
       };
-      addStoryCardToDOM(story);
-      alert(`Story "${title}" saved locally.`);
+      storiesDB.push(story);
+      saveStoriesToDB();
+      renderStories();
+      alert(`Story "${title}" saved!`);
   }
 
   document.getElementById('saveStoryBtn').addEventListener('click', function() {
@@ -423,7 +444,7 @@ document.addEventListener("DOMContentLoaded", () => {
       contentInput.value = "";
   });
   
-  // --- NEW: Updated signup and signin logic to handle credentials ---
+  // --- signup ---
   document.getElementById('signupForm').addEventListener('submit', function(e) {
       e.preventDefault();
       const name = document.getElementById('signupName').value;
@@ -437,18 +458,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const newUser = { name, email, password };
       userDB[email] = newUser;
-      localStorage.setItem("user_database", JSON.stringify(userDB)); // Save new user to the "database"
+      localStorage.setItem("user_database", JSON.stringify(userDB)); 
       
       localStorage.setItem("user", JSON.stringify(newUser));
       loggedInUser = newUser;
       
       updateAuthUI();
-      loadInitialStories();
+      renderStories();
       document.getElementById('editor').scrollIntoView({behavior: 'smooth'});
       alert(`Account created! Welcome, ${newUser.name}.`);
       document.getElementById('signupForm').reset();
   });
   
+  // --- signin ---
   document.getElementById('signinForm').addEventListener('submit', function(e) {
       e.preventDefault();
       const email = document.getElementById('signinEmail').value;
@@ -461,7 +483,7 @@ document.addEventListener("DOMContentLoaded", () => {
           loggedInUser = user;
           
           updateAuthUI();
-          loadInitialStories();
+          renderStories();
           document.getElementById('editor').scrollIntoView({behavior: 'smooth'});
           alert(`Logged in as ${user.name}.`);
       } else {
@@ -475,7 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
       localStorage.removeItem("user");
       loggedInUser = null;
       updateAuthUI();
-      loadInitialStories();
+      renderStories();
       alert("You have been logged out.");
   });
   
@@ -483,11 +505,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.target.classList.contains('delete-btn')) {
         const confirmed = confirm("Are you sure you want to delete this story?");
         if (confirmed) {
-            const card = e.target.closest('.story-card');
-            if (card) {
-                card.remove();
-                alert("Story deleted.");
-            }
+            const storyId = parseInt(e.target.dataset.storyId);
+            storiesDB = storiesDB.filter(s => s.id !== storyId);
+            saveStoriesToDB();
+            renderStories();
+            alert("Story deleted.");
         }
     }
   });
@@ -499,20 +521,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   
-  function loadInitialStories() {
-      const storiesData = [
-          { title: '🌙 Midnight Tales', content: 'Once upon a time in a city that never slept...', authorEmail: 'dummy@example.com' },
-          { title: '🌸 Blossoms of Spring', content: 'The garden whispered secrets only the flowers knew...', authorEmail: 'dummy@example.com' },
-          { title: '🔥 The Fire Within', content: 'In the heart of the mountain, a flame burned eternal...', authorEmail: 'dummy@example.com' }
-      ];
-      storiesSection.innerHTML = '';
-      storiesData.forEach(story => addStoryCardToDOM(story));
-  }
-  
-  loadInitialStories();
+  // Load on startup
+  renderStories();
   updateAuthUI();
 });
 </script>
+
 
 </body>
 </html>
